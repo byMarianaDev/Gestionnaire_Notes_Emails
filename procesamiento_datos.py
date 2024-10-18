@@ -3,7 +3,7 @@ import pandas as pd
 from docx import Document
 import logging
 from threading import Thread
-from gestor_correo import GestorCorreo  # Importar la clase desde el archivo del colaborador 1
+from gestion_emails import GestorCorreo  # Importar la clase desde el archivo del colaborador 1
 
 # Configurar el log de errores
 logging.basicConfig(filename='app.log', level=logging.DEBUG)
