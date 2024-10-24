@@ -2,85 +2,78 @@ import os
 import pandas as pd
 from docx import Document
 import logging
-from threading import Thread
-from gestion_emails import GestorCorreo  # Importar la clase desde el archivo del colaborador 1
 
-# Configurar el log de errores
+# Configurar el sistema de logs para registrar errores
 logging.basicConfig(filename='app.log', level=logging.DEBUG)
 
-# Función para cargar datos desde el archivo Excel
+# Función para cargar los datos desde un archivo Excel
 def cargar_datos_excel(archivo_excel):
+    """
+    Carga datos desde un archivo Excel utilizando pandas.
+
+    Parámetros:
+    archivo_excel (str): Ruta del archivo Excel que contiene los datos.
+
+    Retorna:
+    pd.DataFrame: DataFrame con los datos del archivo Excel si se carga correctamente.
+    None: Si ocurre un error al cargar el archivo (por ejemplo, si no se encuentra).
+    """
     try:
+        # Intentar cargar los datos desde el archivo Excel
         return pd.read_excel(archivo_excel)
     except FileNotFoundError:
+        # Manejo de error si el archivo no se encuentra
         print(f"El archivo '{archivo_excel}' no se encuentra. Verifica la ruta o el nombre.")
         logging.error(f"El archivo '{archivo_excel}' no se encuentra. Verifica la ruta o el nombre.")
-        exit()
+        return None
 
-# Función para generar el informe a partir de la plantilla
+# Función para generar informes personalizados a partir de una plantilla de Word
 def generar_informe(nombre, matematicas, ciencias, historia, plantilla):
+    """
+    Genera un informe de notas personalizado para un alumno, basado en una plantilla de Word.
+
+    Parámetros:
+    nombre (str): Nombre del alumno.
+    matematicas (float): Nota en Matemáticas.
+    ciencias (float): Nota en Ciencias.
+    historia (float): Nota en Historia.
+    plantilla (str): Ruta de la plantilla de Word.
+
+    Retorna:
+    str: Nombre del archivo del informe generado si se guarda correctamente.
+    None: Si ocurre un error durante la generación del informe.
+    """
+    # Calcular el promedio de las notas
     promedio = (matematicas + ciencias + historia) / 3
+
+    # Diccionario con los datos que serán reemplazados en la plantilla
     datos = {
         '{ALUMNO}': nombre,
         '{MATEMÁTICAS}': str(matematicas),
         '{CIENCIAS}': str(ciencias),
         '{HISTORIA}': str(historia),
-        '{PROMEDIO}': f'{promedio:.2f}'
+        '{PROMEDIO}': f'{promedio:.2f}'  # Promedio formateado con dos decimales
     }
 
     try:
-        # Crear el documento a partir de la plantilla
+        # Cargar la plantilla de Word
         doc = Document(plantilla)
+
+        # Reemplazar los campos de la plantilla con los valores reales del alumno
         for parrafo in doc.paragraphs:
             for campo, valor in datos.items():
                 if campo in parrafo.text:
                     parrafo.text = parrafo.text.replace(campo, valor)
 
-        # Guardar el archivo de informe personalizado
+        # Guardar el archivo de informe personalizado en la carpeta 'uploads'
         nombre_archivo = f'nota_{nombre}.docx'
-        doc.save(nombre_archivo)
-        return nombre_archivo
-    except FileNotFoundError:
-        print(f"La plantilla '{plantilla}' no se encuentra. Verifica la ruta o el nombre.")
-        logging.error(f"La plantilla '{plantilla}' no se encuentra. Verifica la ruta o el nombre.")
-        exit()
+        ruta_archivo = os.path.join('uploads', nombre_archivo)
+        doc.save(ruta_archivo)  # Guardar el documento generado
 
-# Cargar datos y generar informes
-archivo_excel = 'notas_alumnos.xlsx'
-plantilla = 'plantilla_notas.docx'
+        return nombre_archivo  # Devolver el nombre del archivo generado
 
-df = cargar_datos_excel(archivo_excel)
-
-# Crear una instancia del gestor de correos (compartido con el colaborador 1)
-gestor = GestorCorreo(os.getenv('EMAIL_ADDRESS'), os.getenv('EMAIL_PASSWORD'))
-
-# Iterar sobre cada fila del archivo Excel para generar informes y enviar correos
-def procesar_fila(fila):
-    nombre = fila['Alumno']
-    matematicas = fila['Matemáticas']
-    ciencias = fila['Ciencias']
-    historia = fila['Historia']
-    destinatario = fila['Correo']
-
-    archivo_informe = generar_informe(nombre, matematicas, ciencias, historia, plantilla)
-
-    asunto = f'Informe de Notas para {nombre}'
-    cuerpo = f"""Estimado/a {nombre}, adjunto encontrarás tu informe de notas.
-
-Atentamente,
-El Profesorado"""
-
-    gestor.enviar_correo(destinatario, asunto, cuerpo, archivo_informe)
-
-# Crear hilos para enviar correos de manera concurrente
-hilos = []
-for index, fila in df.iterrows():
-    hilo = Thread(target=procesar_fila, args=(fila,))
-    hilos.append(hilo)
-    hilo.start()
-
-# Esperar a que todos los hilos terminen
-for hilo in hilos:
-    hilo.join()
-
-print("Correos enviados exitosamente.")
+    except Exception as e:
+        # Manejo de errores durante la generación del informe
+        print(f"Error al generar informe para {nombre}: {e}")
+        logging.error(f"Error al generar informe para {nombre}: {e}")
+        return None
